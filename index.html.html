@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>BIOS · DOX · HOA · HOD</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #020202;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            min-height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+            color: #f0f0f0;
+        }
+
+        /* ---- SPLASH SCREEN ---- */
+        #splash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: black;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.6s ease;
+            opacity: 1;
+            pointer-events: all;
+            cursor: pointer;
+        }
+        #splash-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #splash-gif {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .splash-text {
+            position: relative;
+            z-index: 1;
+            color: #ff1a1a;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px #ff0000;
+            margin-top: 20rem;
+            animation: pulseText 2s infinite;
+            pointer-events: none;
+        }
+        @keyframes pulseText {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* ---- background canvas ---- */
+        #drift-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ---- TAB FLASH OVERLAY ---- */
+        #flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s ease;
+        }
+        #flash-overlay.flash-hit {
+            opacity: 1;
+            transition: opacity 0.05s ease;
+        }
+
+        /* main foreground - SCROLLABLE */
+        .bios-foreground {
+            position: relative;
+            z-index: 10;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 2rem;
+            background-color: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            min-height: 100vh;
+            box-shadow: 0 0 40px rgba(0,0,0,0.7);
+        }
+
+        /* audio control widget */
+        .audio-control {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            padding: 8px 14px;
+            border-radius: 40px;
+            border: 1px solid #ff2a2a;
+            font-size: 0.75rem;
+            font-family: monospace;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #ffaaaa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 1px;
+        }
+        .audio-control:hover {
+            background: #aa2222;
+            color: white;
+            border-color: #ff8888;
+            box-shadow: 0 0 12px red;
+        }
+        .audio-control span {
+            font-size: 1rem;
+        }
+
+        /* BIOS title */
+        .bios-title {
+            text-align: center;
+            width: 100%;
+        }
+        .bios-title h1 {
+            font-size: 5rem;
+            font-weight: 900;
+            letter-spacing: 12px;
+            font-family: 'Courier New', 'Fira Code', monospace;
+            text-transform: uppercase;
+            background: linear-gradient(145deg, #ff1a1a 0%, #ffffff 70%, #ff4d4d 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 15px rgba(255,0,0,0.5);
+            animation: titleFlicker 3s infinite alternate;
+        }
+        @keyframes titleFlicker {
+            0% { text-shadow: 0 0 15px #ff0000; }
+            50% { text-shadow: 0 0 25px #ff3333, 0 0 10px #ff0000; }
+            100% { text-shadow: 0 0 15px #cc0000; }
+        }
+
+        /* tabs */
+        .tabs-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin: 0.5rem 0 0.2rem 0;
+        }
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2rem;
+            background: rgba(0,0,0,0.6);
+            padding: 0.7rem 2rem;
+            border-radius: 60px;
+            border: 1px solid #ff2a2a;
+            backdrop-filter: blur(4px);
+        }
+        .tab {
+            font-size: 1.6rem;
+            font-weight: bold;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #dddddd;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: 'Courier New', monospace;
+            padding: 0.3rem 0.6rem;
+            border-bottom: 2px solid transparent;
+            position: relative;
+        }
+        .tab:hover {
+            color: #ff5555;
+            text-shadow: 0 0 8px #ff0000;
+            border-bottom-color: #ff4444;
+            animation: glitch 0.2s linear;
+        }
+        .tab.active {
+            color: #ff1a1a;
+            border-bottom-color: #ff1a1a;
+            text-shadow: 0 0 6px #ff6666, 0 0 15px #ff0000;
+            font-weight: 900;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(2px, -1px); }
+            60% { transform: translate(-1px, -1px); }
+            80% { transform: translate(1px, 2px); }
+            100% { transform: translate(0); }
+        }
+
+        /* panel animations */
+        .panel {
+            width: 100%;
+            display: none;
+            animation: fadeInPanel 0.4s ease;
+        }
+        .panel.active-panel {
+            display: block;
+        }
+        @keyframes fadeInPanel {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* cards & columns */
+        .full-width-card {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(6px);
+            border-radius: 32px;
+            padding: 2rem 1.8rem;
+            box-shadow: 0 20px 30px -12px black, 0 0 0 1px rgba(255,50,50,0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-top: 3px solid #ff1a1a;
+            border-bottom: 1px solid #ff1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .full-width-card:hover {
+            transform: translateY(-4px);
+            background: rgba(20, 20, 20, 0.9);
+            border-top-color: #ff6a6a;
+        }
+        .column-header-duo {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-bottom: 1.4rem;
+            padding-bottom: 0.6rem;
+            border-bottom: 2px solid #ff2a2a;
+            width: 100%;
+            background: linear-gradient(135deg, #ffdddd, #ff4d4d);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 5px #ff1a1a40;
+            font-family: 'Courier New', 'Segoe UI Symbol', monospace;
+        }
+        .custom-symbol {
+            font-size: 3.5rem;
+            margin: 0.5rem 0;
+            color: #ff3333;
+            text-shadow: 0 0 15px #ff0000, 0 0 5px #ff6666;
+            display: inline-block;
+            animation: symbolPulse 2s infinite ease-in-out;
+            letter-spacing: 0;
+            line-height: 1;
+        }
+        @keyframes symbolPulse {
+            0% { text-shadow: 0 0 5px #ff0000; transform: scale(1); }
+            50% { text-shadow: 0 0 25px #ff3333, 0 0 10px #ff8888; transform: scale(1.05); }
+            100% { text-shadow: 0 0 5px #ff0000; transform: scale(1); }
+        }
+        .divider-red {
+            width: 60px;
+            height: 2px;
+            background: #ff2a2a;
+            margin: 1rem auto;
+        }
+        .desc-text {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #cccccc;
+            font-family: monospace;
+            letter-spacing: 0.5px;
+            text-transform: none;
+            max-width: 100%;
+            word-wrap: break-word;
+        }
+        .desc-text span.highlight {
+            color: #ff6a6a;
+            font-weight: bold;
+        }
+        .character-manifesto {
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(255, 30, 30, 0.1);
+            border-radius: 14px;
+            border-left: 3px solid #ff2a2a;
+            border-right: 1px solid rgba(255, 50, 50, 0.3);
+            text-align: left;
+            color: #f0cccc;
+            font-family: monospace;
+            font-style: italic;
+        }
+        .exorcism-manifesto {
+            background: rgba(200, 40, 40, 0.15);
+            border-left-color: #ff5555;
+            box-shadow: 0 0 8px rgba(255, 80, 80, 0.2);
+        }
+        .prostituted-manifesto {
+            background: rgba(180, 30, 100, 0.15);
+            border-left-color: #ff66aa;
+        }
+        .johnny-card {
+            background: rgba(150, 50, 50, 0.2);
+            border-top-color: #ff8844;
+            border-left: 3px solid #ffaa66;
+        }
+        .johnny-header {
+            background: linear-gradient(135deg, #ffaa66, #ff4422);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        /* standout paragraph (BODY DECAY) */
+        .standout-paragraph {
+            background: linear-gradient(135deg, #1a0505 0%, #0a0000 100%);
+            border: 2px solid #ff3333;
+            border-radius: 24px;
+            padding: 1.8rem;
+            margin: 1rem 0;
+            box-shadow: 0 0 25px rgba(255, 0, 0, 0.4), inset 0 0 10px rgba(255, 50, 50, 0.1);
+            transition: all 0.3s ease;
+            animation: borderPulse 2s infinite alternate;
+        }
+        .standout-paragraph:hover {
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.7);
+            border-color: #ff6666;
+            transform: scale(1.01);
+        }
+        @keyframes borderPulse {
+            0% {
+                border-color: #ff1a1a;
+                box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
+            }
+            100% {
+                border-color: #ff6666;
+                box-shadow: 0 0 35px rgba(255, 50, 50, 0.7);
+            }
+        }
+        .moving-description {
+            display: inline-block;
+            animation: floatColumn 3.5s ease-in-out infinite;
+            max-width: 100%;
+        }
+        @keyframes floatColumn {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .long-description {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #ffffff;
+            font-family: monospace;
+            text-transform: none;
+            letter-spacing: 0.5px;
+            max-width: 100%;
+            word-wrap: break-word;
+            background: rgba(0,0,0,0.5);
+            border-radius: 16px;
+            font-weight: 500;
+            text-shadow: 0 0 3px #ff0000;
+        }
+        .standout-paragraph .long-description {
+            background: transparent;
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #ffdddd;
+            text-shadow: 0 0 5px #ff0000, 0 0 2px #ff4444;
+        }
+        .glow-foot {
+            font-size: 0.7rem;
+            margin-top: 1rem;
+            color: #aa5555;
+        }
+
+        /* info panels */
+        .info-panel {
+            background: rgba(0,0,0,0.7);
+            border-radius: 28px;
+            padding: 2rem;
+            text-align: center;
+            border-left: 4px solid #ff1a1a;
+            max-width: 800px;
+            margin: 1.5rem auto;
+            backdrop-filter: blur(5px);
+        }
+        .info-panel h3 {
+            font-size: 2.2rem;
+            color: #ff5e5e;
+            margin-bottom: 1rem;
+            font-family: monospace;
+            letter-spacing: 4px;
+        }
+        .info-panel p {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #ddd;
+        }
+        .soul-captivity-box {
+            background: rgba(30, 10, 10, 0.8);
+            border: 2px solid #ff3333;
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
+            animation: pulseRed 3s infinite;
+        }
+        .soul-captivity-text {
+            font-family: monospace;
+            font-size: 1rem;
+            color: #ffaaaa;
+            text-shadow: 0 0 5px #ff0000;
+            letter-spacing: 1px;
+            line-height: 1.5;
+        }
+        @keyframes pulseRed {
+            0% { border-color: #ff3333; box-shadow: 0 0 10px rgba(255, 0, 0, 0.3); }
+            50% { border-color: #ff7777; box-shadow: 0 0 25px rgba(255, 50, 50, 0.7); }
+            100% { border-color: #ff3333; box-shadow: 0 0 10px rgba(255, 0, 0, 0.3); }
+        }
+        .warning-txt {
+            color: #ff8888;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        /* coffin floating animation container for HOD panel */
+        .coffins-container {
+            position: relative;
+            width: 100%;
+            min-height: 200px;
+            margin: 1rem 0;
+            overflow: hidden;
+            pointer-events: none;
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+        }
+        .floating-coffin {
+            position: absolute;
+            font-family: monospace;
+            white-space: pre;
+            opacity: 0.7;
+            animation: floatCoffin linear infinite;
+            text-shadow: 0 0 5px #ff4444;
+            pointer-events: none;
+        }
+        @keyframes floatCoffin {
+            0% {
+                transform: translateY(100%) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.8;
+            }
+            90% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(-100%) rotate(10deg);
+                opacity: 0;
+            }
+        }
+        .welcome-speech {
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid #aa4444;
+            border-radius: 20px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.5);
+            animation: pulseDark 4s infinite;
+        }
+        @keyframes pulseDark {
+            0% { border-color: #aa4444; box-shadow: 0 0 15px rgba(255, 0, 0, 0.3); }
+            50% { border-color: #ff6666; box-shadow: 0 0 30px rgba(255, 50, 50, 0.8); }
+            100% { border-color: #aa4444; box-shadow: 0 0 15px rgba(255, 0, 0, 0.3); }
+        }
+        .welcome-text {
+            font-family: monospace;
+            font-size: 1rem;
+            color: #ffaaaa;
+            text-shadow: 0 0 6px #ff0000;
+            letter-spacing: 1px;
+            line-height: 1.6;
+            white-space: pre-line;
+        }
+
+        @media (max-width: 780px) {
+            .bios-title h1 { font-size: 2.6rem; letter-spacing: 6px; }
+            .tab { font-size: 1rem; }
+            .tabs { gap: 1rem; padding: 0.5rem 1rem; }
+            .column-header-duo { font-size: 1.4rem; }
+            .long-description { font-size: 0.7rem; }
+            .standout-paragraph { padding: 1rem; }
+            .custom-symbol { font-size: 2.5rem; }
+            .soul-captivity-text { font-size: 0.8rem; }
+            .welcome-text { font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SPLASH SCREEN INTRO -->
+    <div id="splash-overlay">
+        <img id="splash-gif" src="https://files.catbox.moe/j0gvdz.gif" alt="splash" />
+        <div class="splash-text">[ CLICK TO ENTER ]</div>
+    </div>
+
+    <!-- FIXED FLASH OVERLAY (tab transition) -->
+    <div id="flash-overlay"></div>
+
+    <canvas id="drift-canvas"></canvas>
+
+    <!-- AUDIO PLAYER (autoplay + loop) -->
+    <audio id="bgm" src="https://files.catbox.moe/8ig0j9.mp3" loop preload="auto"></audio>
+    <div id="audioControl" class="audio-control">
+        <span>🔊</span> <span id="audioStatus">BGM ACTIVE</span>
+    </div>
+
+    <div class="bios-foreground">
+        <div class="bios-title">
+            <h1>BIOS</h1>
+        </div>
+
+        <!-- 4 TABS -->
+        <div class="tabs-container">
+            <div class="tabs">
+                <div class="tab active" data-tab="home">HOME</div>
+                <div class="tab" data-tab="dox">DOX</div>
+                <div class="tab" data-tab="hoa">HOA</div>
+                <div class="tab" data-tab="hod">HOD</div>
+            </div>
+        </div>
+
+        <!-- HOME PANEL - ONLY BODY DECAY -->
+        <div id="homePanel" class="panel active-panel">
+            <div class="full-width-card">
+                <div class="column-header-duo">𝔅𝔒𝔇𝔜 𝔇𝔈ℭ𝔄𝔜</div>
+                <div class="custom-symbol">◈⨁⌇⨁◈</div>
+                <div class="divider-red"></div>
+                <div class="standout-paragraph">
+                    <div class="moving-description">
+                        <div class="long-description">
+                            𝔸𝕝𝕝 𝕙𝕖𝕒𝕣𝕚𝕟𝕘 𝕥𝕠 𝔹𝕆𝔻𝕐 𝔻𝔼ℂ𝔸𝕐 𝕥𝕙𝕚𝕤 𝕚𝕟𝕕𝕚𝕧𝕚𝕕𝕦𝕒𝕝 𝕚𝕤 𝕟𝕠𝕥 𝕙𝕒𝕣𝕞𝕗𝕦𝕝 𝕙𝕖 𝕚𝕤 𝕠𝕟𝕝𝕪 𝕒 𝕡𝕖𝕣𝕤𝕠𝕟 𝕥𝕙𝕒𝕥 𝕨𝕚𝕝𝕝 𝕞𝕒𝕜𝕖 𝕪𝕠𝕦 𝔰𝔦𝔱 𝕒𝕥 𝕥𝕙𝕖 𝕓𝕠𝕥𝕥𝕠𝕞 𝕠𝕗 𝕥𝕙𝕖 𝕖𝕒𝕣𝕥𝕙 𝕥𝕚𝕝𝕝 𝕪𝕠𝕦 𝕔𝕒𝕟 𝕟𝕠 𝕝𝕠𝕟𝕘𝕖𝕣 𝕣𝕖𝕒𝕔𝕙 𝕥𝕙𝕖 𝕤𝕦𝕣𝕗𝕒𝕔𝕖 𝕟𝕖𝕚𝕥𝕙𝕖𝕣 𝕪𝕠𝕦 𝕠𝕣 𝕪𝕠𝕦𝕣 𝔦𝔫𝔰𝔭𝔦𝔯𝔞𝔱𝔦𝔬𝔫 𝕨𝕚𝕝𝕝 𝕖𝕧𝕖𝕣 𝕞𝕖𝕖𝕥 𝕤𝕦𝕟𝕝𝕚𝕘𝕙𝕥 𝕟𝕠𝕣 𝕥𝕙𝕖 𝕤𝕜𝕪 𝕪𝕠𝕦 𝕨𝕚𝕝𝕝 𝕓𝕖 𝕒𝕞𝕓𝕝𝕖 𝕚𝕟 𝕥𝕙𝕖 𝕦𝕟𝕜𝕟𝕠𝕨𝕟 𝕨𝕙𝕚𝕝𝕖 𝕪𝕠𝕦𝕣 𝕓𝕠𝕕𝕪 𝔡𝕖𝕔𝕒𝕪𝕤 𝕠𝕗 𝕗𝕝𝕖𝕤𝕙 𝕒𝕟𝕕 𝕪𝕠𝕦 𝕤𝕞𝕖𝕝𝕝 𝕥𝕙𝕖 𝕒𝕣𝕠𝕞𝕒𝕤 𝕠𝕗 𝕚𝕥 𝕓𝕦𝕥 𝕒𝕝𝕨𝕒𝕪𝕤 𝕣𝕖𝕞𝕖𝕞𝕓𝕖𝕣 𝕥𝕙𝕚𝕤 𝕦𝕤𝕖𝕣 𝕚𝕤 ℕ𝕆𝕋 𝕙𝕒𝕣𝕞𝕗𝕦𝕝 𝕙𝕖 𝕨𝕚𝕝𝕝 𝕠𝕟𝕝𝕪 𝕤𝕡𝕣𝕒𝕪 𝔭𝕦𝕟𝕘𝕖𝕟𝕥 𝔩𝕚𝕢𝕦𝕚𝕕 𝕠𝕟 𝕪𝕠𝕦𝕣 𝕓𝕠𝕕𝕪 𝕥𝕚𝕝𝕝 𝕪𝕠𝕦 𝔟𝕖𝕕 𝔣𝕠𝕣 𝕪𝕠𝕦𝕣 𝔩𝕠𝕣𝕕
+                        </div>
+                    </div>
+                </div>
+                <div class="divider-red" style="width:40px;"></div>
+                <div class="glow-foot">⚡ 𝔣𝔩𝔢𝔰𝔥 𝔯𝔢𝔫𝔡𝔢𝔯𝔢𝔡</div>
+            </div>
+            <div style="height: 2rem;"></div>
+        </div>
+
+        <!-- DOX PANEL - FULLY RESTORED -->
+        <div id="doxPanel" class="panel">
+            <div class="info-panel">
+                <h3>⚡ DOX ⚡</h3>
+                <p>/// digital footprint extraction ///<br>IP geolocation · network fingerprinting · metadata correlation<br><span style="color:#ff5555">[ passive reconnaissance ]</span><br><br>❖ address: 0x7d3․c0llect ❖</p>
+                <div class="soul-captivity-box">
+                    <div class="soul-captivity-text">⛧ soul captivity ⛧<br><br>this is where all of the downfalls have been marked and captured to rot and will not be let go until their time is overdo</div>
+                </div>
+                <div class="divider-red" style="margin:1.2rem auto;width:50px;"></div>
+                <p style="font-size:0.8rem;">“the watcher knows your signal”</p>
+                <span class="warning-txt">⚠️ informational only — no active doxxing ⚠️</span>
+            </div>
+        </div>
+
+        <!-- HOA PANEL - FULLY RESTORED WITH JOHNNY COX -->
+        <div id="hoaPanel" class="panel">
+            <div class="info-panel">
+                <h3 style="color:#ffaa66;">◈ HOA ◈</h3>
+                
+                <div class="column-card johnny-card" style="max-width: 500px; margin: 1rem auto; background: rgba(40, 20, 10, 0.85);">
+                    <div class="column-header-duo johnny-header" style="font-size: 1.8rem; border-bottom-color: #ff8844;">
+                        👑 Johnny Cox 👑
+                    </div>
+                    <div class="sigil-mini" style="color: #ffaa66;">◈ 🐔 ◈</div>
+                    <div class="divider-red" style="background: #ff8844;"></div>
+                    <div class="desc-text">
+                        <span class="highlight" style="color:#ffaa66;">// a632 larping to nuke server //</span><br>
+                        <div class="character-manifesto" style="background: rgba(255, 100, 50, 0.15); border-left-color: #ffaa66; font-size: 0.9rem;">
+                            "larping harm in the game yet is a pussy and is <span style="color:#ffaa66; font-weight:bold;">OWNED by BIOS</span>"
+                        </div>
+                    </div>
+                    <div class="divider-red" style="width:40px; background:#ff8844;"></div>
+                    <div class="glow-foot" style="color:#ffaa66;">⚔️ 𝔟𝔯𝔬𝔨𝔢𝔫 𝔟𝔶 𝔱𝔥𝔢 𝔟𝔦𝔬𝔰 𝔠𝔬𝔳𝔢𝔫𝔞𝔫𝔱 ⚔️</div>
+                </div>
+                
+                <div class="divider-red" style="margin:1.2rem auto;"></div>
+                <p>HALL OF AUTISM<br>neurodivergent resonance · pattern recognition · intense focus<br><span style="color:#ff8888">◆ spectrum continuum ◆</span><br><br>“different computation, same flesh”</p>
+                <div class="divider-red" style="margin:1.2rem auto;"></div>
+                <p class="warning-txt">➤ symbolic space — respect & awareness</p>
+            </div>
+        </div>
+
+        <!-- HOD PANEL - FULLY RESTORED -->
+        <div id="hodPanel" class="panel">
+            <div class="info-panel">
+                <h3>⛧ HOD ⛧</h3>
+                <p>HALL OF DEATH<br>final threshold · entropy sanctum · terminus<br><span style="color:#ff5555">◆ memento mori ◆</span></p>
+                
+                <div class="welcome-speech">
+                    <div class="welcome-text">
+                        ⚰️ hello new soul ⚰️<br><br>
+                        welcome to your new home<br>
+                        welcome to your final destination<br>
+                        you're finally home<br><br>
+                        i hope you can get comfy<br>
+                        because this is your last welcoming space<br><br>
+                        say hello to the other souls<br>
+                        let your soul rot and decay
+                    </div>
+                </div>
+                
+                <div class="divider-red" style="margin:1.2rem auto;"></div>
+                
+                <div id="coffinsArea" class="coffins-container"></div>
+                
+                <p class="warning-txt">⚰️ symbolic homage to mortality</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_HERE";
+
+        // Splash screen
+        (function() {
+            const splash = document.getElementById('splash-overlay');
+            let dismissed = false;
+            function dismissSplash() {
+                if (dismissed) return;
+                dismissed = true;
+                splash.classList.add('fade-out');
+                setTimeout(() => { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 700);
+            }
+            setTimeout(dismissSplash, 3500);
+            splash.addEventListener('click', dismissSplash);
+        })();
+
+        // Drift background
+        (function() {
+            const canvas = document.getElementById('drift-canvas');
+            const ctx = canvas.getContext('2d');
+            let width = window.innerWidth;
+            let height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789㊛☠⚡⛧◈✠".split("");
+            const fontSize = 16;
+            const columns = Math.floor(width / fontSize) + 1;
+            const drops = Array(columns).fill(1);
+            const embers = [];
+            for (let i = 0; i < 100; i++) {
+                embers.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vy: -Math.random() * 2 - 0.5,
+                    size: Math.random() * 4 + 1,
+                    opacity: Math.random() * 0.5 + 0.3,
+                    char: Math.random() > 0.7 ? "☠" : "·"
+                });
+            }
+            function draw() {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                ctx.fillRect(0, 0, width, height);
+                ctx.font = fontSize + 'px monospace';
+                for (let i = 0; i < drops.length; i++) {
+                    const text = chars[Math.floor(Math.random() * chars.length)];
+                    const x = i * fontSize;
+                    const y = drops[i] * fontSize;
+                    ctx.fillStyle = `rgba(255, ${Math.random() > 0.3 ? 0 : 60}, ${Math.random() > 0.3 ? 0 : 30}, 0.9)`;
+                    ctx.fillText(text, x, y);
+                    if (y > height && Math.random() > 0.975) drops[i] = 0;
+                    drops[i]++;
+                }
+                for (let e of embers) {
+                    ctx.font = e.size * 6 + 'px monospace';
+                    ctx.fillStyle = `rgba(255, 80, 80, ${e.opacity})`;
+                    ctx.fillText(e.char, e.x, e.y);
+                    e.y += e.vy;
+                    if (e.y < -10) { e.y = height + 10; e.x = Math.random() * width; }
+                }
+                requestAnimationFrame(draw);
+            }
+            window.addEventListener('resize', () => {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width;
+                canvas.height = height;
+                drops.length = Math.floor(width / fontSize) + 1;
+                drops.fill(1);
+            });
+            draw();
+        })();
+
+        // Tabs with flash
+        (function() {
+            const flashOverlay = document.getElementById('flash-overlay');
+            flashOverlay.style.backgroundImage = "url('https://files.catbox.moe/g5yeih.gif')";
+            const tabs = document.querySelectorAll('.tab');
+            const panels = {
+                home: document.getElementById('homePanel'),
+                dox: document.getElementById('doxPanel'),
+                hoa: document.getElementById('hoaPanel'),
+                hod: document.getElementById('hodPanel')
+            };
+            function triggerFlash() {
+                flashOverlay.classList.add('flash-hit');
+                setTimeout(() => flashOverlay.classList.remove('flash-hit'), 150);
+            }
+            function setActive(tabId) {
+                Object.values(panels).forEach(p => p.classList.remove('active-panel'));
+                if (panels[tabId]) panels[tabId].classList.add('active-panel');
+                tabs.forEach(t => {
+                    t.classList.remove('active');
+                    if (t.dataset.tab === tabId) t.classList.add('active');
+                });
+                triggerFlash();
+            }
+            tabs.forEach(tab => tab.addEventListener('click', () => setActive(tab.dataset.tab)));
+            setActive('home');
+        })();
+
+        // Audio controls
+        (function() {
+            const audio = document.getElementById('bgm');
+            const btn = document.getElementById('audioControl');
+            const statusSpan = document.getElementById('audioStatus');
+            function startAudio() {
+                audio.play().then(() => statusSpan.innerText = 'BGM ACTIVE').catch(() => statusSpan.innerText = 'BGM OFF (click)');
+            }
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (audio.paused) {
+                    audio.play().then(() => statusSpan.innerText = 'BGM ACTIVE');
+                } else {
+                    audio.pause();
+                    statusSpan.innerText = 'BGM OFF';
+                }
+            });
+            const splashDiv = document.getElementById('splash-overlay');
+            const startAfterInteraction = () => {
+                startAudio();
+                document.removeEventListener('click', startAfterInteraction);
+                if (splashDiv) splashDiv.removeEventListener('click', startAfterInteraction);
+            };
+            document.addEventListener('click', startAfterInteraction);
+            if (splashDiv) splashDiv.addEventListener('click', startAfterInteraction);
+            audio.loop = true;
+        })();
+
+        // Floating coffins for HOD
+        (function() {
+            const container = document.getElementById('coffinsArea');
+            if (!container) return;
+            const numbers = "0123456789";
+            const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            function generateCoffin() {
+                const div = document.createElement('div');
+                div.className = 'floating-coffin';
+                const w = Math.floor(Math.random() * 8) + 8;
+                const h = Math.floor(Math.random() * 5) + 4;
+                let art = "╔" + "═".repeat(w) + "╗\n";
+                for (let i = 0; i < h; i++) {
+                    let line = "║";
+                    for (let j = 0; j < w; j++) {
+                        if (Math.random() > 0.7) {
+                            line += Math.random() > 0.5 ? numbers[Math.floor(Math.random() * numbers.length)] : letters[Math.floor(Math.random() * letters.length)];
+                        } else {
+                            line += " ";
+                        }
+                    }
+                    line += "║";
+                    art += line + "\n";
+                }
+                art += "╚" + "═".repeat(w) + "╝";
+                div.textContent = art;
+                div.style.fontSize = (Math.random() * 6 + 8) + "px";
+                div.style.color = `rgba(255, ${Math.floor(Math.random() * 100) + 50}, ${Math.floor(Math.random() * 50)}, 0.9)`;
+                div.style.left = Math.random() * 80 + "%";
+                div.style.animationDuration = (Math.random() * 8 + 6) + "s";
+                div.style.animationDelay = Math.random() * 5 + "s";
+                return div;
+            }
+            setInterval(() => {
+                const coffin = generateCoffin();
+                container.appendChild(coffin);
+                setTimeout(() => coffin.remove(), 15000);
+            }, 2000);
+        })();
+    </script>
+</body>
+</html>
